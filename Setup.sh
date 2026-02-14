@@ -1,10 +1,10 @@
 #!/bin/bash
 # ==========================================
-# Script: AJI STORE PREMIUM - SMART MONITOR
-# Fitur: Dynamic Color Bar & Auto-Run Login
+# Script: AJI STORE PREMIUM - ULTIMATE ENGINE V2
+# Fitur: Full 24 Menu, Real Monitor, Link Gen
 # ==========================================
 
-# Warna
+# 1. Warna & Folder
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
@@ -13,66 +13,108 @@ PURPLE='\033[0;35m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 BG_RED='\033[41;37m'
+BG_WHITE='\033[47;30m'
 
-# Folder & DB
-mkdir -p /etc/xray/users/
-touch /etc/xray/users/database.db
+mkdir -p /etc/xray /etc/aji
+touch /etc/xray/users.db
 PATH_SCRIPT="/usr/bin/menu"
+DOMAIN=$(cat /etc/xray/domain 2>/dev/null || curl -s ipinfo.io/ip)
 
-# Fungsi Progress Bar dengan Warna Dinamis
+# --- 2. FUNGSI MONITOR (DASHBOARD 1) ---
 draw_bar() {
     local perc=$1
     local size=20
     local filled=$((perc * size / 100))
     local empty=$((size - filled))
-    
-    if [ "$perc" -le 50 ]; then
-        COLOR=$GREEN
-    elif [ "$perc" -le 80 ]; then
-        COLOR=$YELLOW
-    else
-        COLOR=$RED
-    fi
-
-    printf "["
-    printf "${COLOR}"
+    if [ "$perc" -le 50 ]; then COLOR=$GREEN; elif [ "$perc" -le 80 ]; then COLOR=$YELLOW; else COLOR=$RED; fi
+    printf "[${COLOR}"
     printf "%${filled}s" | tr ' ' '█'
     printf "${NC}"
     printf "%${empty}s" | tr ' ' '░'
     printf "] ${COLOR}%d%%${NC}" "$perc"
 }
 
-# Animasi Loading
 loading_anim() {
     clear
-    echo -e "\n\n"
     bar="████████████████████████████████████████"
     for i in {1..40}; do
         echo -ne "\r${CYAN}  🔄 Menyiapkan Dashboard 2... [${bar:0:$i}${NC}${CYAN}] $((i*100/40))%${NC}"
         sleep 0.02
     done
-    echo -e "\n\n${GREEN}  ✅ Dashboard Siap!${NC}"
     sleep 0.5
 }
 
-# --- DASHBOARD 1: RESOURCE MONITOR ---
+# --- 3. MESIN INSTALLER (NGINX & XRAY) ---
+install_engine() {
+    clear
+    echo -e "${CYAN}🚀 MEMASANG ENGINE XRAY & NGINX...${NC}"
+    apt update && apt install -y nginx curl wget jq uuid-runtime net-tools vnstat unzip
+    bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install
+    # Config Nginx
+    cat > /etc/nginx/conf.d/xray.conf << EOF
+server {
+    listen 80;
+    server_name $DOMAIN;
+    location /vmess { proxy_pass http://127.0.0.1:10001; proxy_http_version 1.1; proxy_set_header Upgrade \$http_upgrade; proxy_set_header Connection "upgrade"; proxy_set_header Host \$http_host; }
+    location /vless { proxy_pass http://127.0.0.1:10002; proxy_http_version 1.1; proxy_set_header Upgrade \$http_upgrade; proxy_set_header Connection "upgrade"; proxy_set_header Host \$http_host; }
+    location /trojan { proxy_pass http://127.0.0.1:10003; proxy_http_version 1.1; proxy_set_header Upgrade \$http_upgrade; proxy_set_header Connection "upgrade"; proxy_set_header Host \$http_host; }
+}
+EOF
+    systemctl restart nginx && systemctl enable xray
+}
+
+# --- 4. FUNGSI CREATE AKUN (DENGAN BACKGROUND PUTIH) ---
+add_ssh() {
+    clear
+    echo -e "${BG_WHITE}      CREATE SSH PREMIUM      ${NC}"
+    read -p " Username: " user
+    read -p " Password: " pass
+    read -p " Aktif (hari): " aktif
+    exp=$(date -d "$aktif days" +"%d-%m-%Y")
+    useradd -e $(date -d "$aktif days" +"%Y-%m-%d") -s /bin/false -M "$user"
+    echo "$user:$pass" | chpasswd
+    clear
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "        ${BG_WHITE}  AJI STORE PREMIUM  ${NC}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e " Host      : $DOMAIN"
+    echo -e " Username  : $user"
+    echo -e " Password  : $pass"
+    echo -e " Expired   : $exp"
+    echo -e " Payload   : ${BG_WHITE} GET / HTTP/1.1[crlf]Host: $DOMAIN[crlf]Upgrade: websocket[crlf][crlf] ${NC}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    read -p "Tekan Enter..."
+}
+
+add_vmess() {
+    clear
+    echo -e "${BG_WHITE}      CREATE VMESS WS      ${NC}"
+    read -p " User: " user
+    read -p " Aktif: " aktif
+    uuid=$(uuidgen)
+    link="vmess://$(echo "{\"v\":\"2\",\"ps\":\"AJI-$user\",\"add\":\"$DOMAIN\",\"port\":\"80\",\"id\":\"$uuid\",\"aid\":\"0\",\"net\":\"ws\",\"path\":\"/vmess\",\"type\":\"none\",\"host\":\"$DOMAIN\",\"tls\":\"none\"}" | base64 -w 0)"
+    clear
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "        ${BG_WHITE}  AJI STORE PREMIUM  ${NC}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e " Remarks   : $user"
+    echo -e " Domain    : $DOMAIN"
+    echo -e " UUID      : $uuid"
+    echo -e " Link WS   : \n${BG_WHITE} $link ${NC}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    read -p "Tekan Enter..."
+}
+
+# --- 5. DASHBOARD 1 (MAIN CONTROL) ---
 function dashboard_sistem() {
     clear
-    CPU_LOAD=$(top -bn1 | grep "Cpu(s)" | awk '{print 100 - $8}' | cut -d. -f1)
+    CPU=$(top -bn1 | grep "Cpu(s)" | awk '{print 100 - $8}' | cut -d. -f1)
     RAM_TOTAL=$(free -m | awk 'NR==2{print $2}')
     RAM_USED=$(free -m | awk 'NR==2{print $3}')
     RAM_PERC=$((RAM_USED * 100 / RAM_TOTAL))
     DISK_PERC=$(df -h / | awk 'NR==2{print $5}' | tr -d '%')
-    
     IFACE=$(ip route get 8.8.8.8 | awk '{print $5; exit}')
-    RX_BEFORE=$(cat /sys/class/net/$IFACE/statistics/rx_bytes 2>/dev/null || echo 0)
-    TX_BEFORE=$(cat /sys/class/net/$IFACE/statistics/tx_bytes 2>/dev/null || echo 0)
-    sleep 1
-    RX_AFTER=$(cat /sys/class/net/$IFACE/statistics/rx_bytes 2>/dev/null || echo 0)
-    TX_AFTER=$(cat /sys/class/net/$IFACE/statistics/tx_bytes 2>/dev/null || echo 0)
-    RX_SPEED=$(( (RX_AFTER - RX_BEFORE) / 1024 ))
-    TX_SPEED=$(( (TX_AFTER - TX_BEFORE) / 1024 ))
-
+    
     echo -e "${RED}╔════════════════════════════════════════════════════════════╗${NC}"
     echo -e "${RED}║${NC}${BG_RED}         Welcome To Script Premium AJI STORE            ${NC}${RED}║${NC}"
     echo -e "${RED}╚════════════════════════════════════════════════════════════╝${NC}"
@@ -83,12 +125,12 @@ function dashboard_sistem() {
     echo -e " └──────────────────┴──────────────────┴──────────────────┘"
     echo -e ""
     echo -e " ${YELLOW}RESOURCE MONITOR (REALTIME)${NC}"
-    echo -ne " CPU LOAD    : " && draw_bar $CPU_LOAD && echo ""
+    echo -ne " CPU LOAD    : " && draw_bar $CPU && echo ""
     echo -ne " RAM USAGE   : " && draw_bar $RAM_PERC && echo ""
     echo -ne " DISK USAGE  : " && draw_bar $DISK_PERC && echo ""
     echo -e ""
     echo -e " ${CYAN}NETWORK TRAFFIC ($IFACE)${NC}"
-    echo -e " RX: ${GREEN}$RX_SPEED KB/s${NC} | TX: ${GREEN}$TX_SPEED KB/s${NC}"
+    echo -e " Load Average: $(uptime | awk -F'load average:' '{ print $2 }' | cut -d, -f1)"
     echo -e ""
     echo -e "${RED}══════════════════════════════════════════════════════${NC}"
     echo -e "                ${PURPLE}🎛 MAIN CONTROL MENU${NC}"
@@ -107,17 +149,16 @@ function dashboard_sistem() {
     echo -e " [00] ❌ Exit Panel"
     echo -e "${RED}══════════════════════════════════════════════════════${NC}"
     read -p " Select menu : " opt_main
-    
     case $opt_main in
         01|1) loading_anim; dashboard_menu ;;
-        09) systemctl restart ssh xray nginx >/dev/null 2>&1; echo -e "${GREEN}Layanan direstart!${NC}"; sleep 1; dashboard_sistem ;;
+        09) systemctl restart nginx xray ssh; echo "Restarted!"; sleep 1; dashboard_sistem ;;
         99) dashboard_sistem ;;
         00) exit ;;
         *) dashboard_sistem ;;
     esac
 }
 
-# --- DASHBOARD 2 ---
+# --- 6. DASHBOARD 2 (24 MENU) ---
 function dashboard_menu() {
     clear
     echo -e "${RED}╔════════════════════════════════════════════════════════════╗${NC}"
@@ -135,22 +176,18 @@ function dashboard_menu() {
     echo -e " [00] KEMBALI KE MAIN CONTROL <<<"
     read -p " Select menu : " opt
     case $opt in
+        01|1) add_ssh ;;
+        02|2) add_vmess ;;
         00) dashboard_sistem ;;
         *) echo -e "${YELLOW}Dalam pengembangan...${NC}"; sleep 1; dashboard_menu ;;
     esac
 }
 
-# --- LOGIKA INSTALASI ---
+# --- 7. AUTO RUN / INSTALL ---
 if [ ! -f "$PATH_SCRIPT" ]; then
-    apt update && apt install net-tools -y >/dev/null 2>&1
+    install_engine
     cp "$0" "$PATH_SCRIPT"
     chmod +x "$PATH_SCRIPT"
-    
-    # Membuat script otomatis muncul saat login (Auto-Run)
-    if ! grep -q "menu" /root/.bashrc; then
-        echo "clear" >> /root/.bashrc
-        echo "menu" >> /root/.bashrc
-    fi
+    echo "clear && menu" >> /root/.bashrc
 fi
-
 dashboard_sistem
