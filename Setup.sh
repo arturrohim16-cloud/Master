@@ -1,8 +1,8 @@
 #!/bin/bash
 # ==========================================
-# Script: AJI STORE PREMIUM - REVISI TOTAL
+# Script: AJI STORE PREMIUM - ULTIMATE EDITION
 # Fitur: SSH, VMESS, VLESS, TROJAN
-# Sistem: Auto-Kill Limit IP & Auto-Block Kuota
+# Sistem: AUTO-KILL IP & AUTO-BLOCK KUOTA GB
 # ==========================================
 
 # 1. Warna & Folder
@@ -19,35 +19,50 @@ mkdir -p /etc/xray/users/
 touch /etc/xray/users/database.db
 DOMAIN=$(cat /etc/xray/domain 2>/dev/null || curl -s ipinfo.io/ip)
 
-# 2. Fungsi Buka Port & Install Paket Pendukung
+# 2. Fungsi Persiapan (Instalasi Pengukur Kuota)
 function pre_install() {
-    apt update && apt install uuid-runtime net-tools ufw iptables cron -y > /dev/null 2>&1
-    # Buka Port 22, 80, 443
+    apt update && apt install uuid-runtime net-tools ufw iptables cron vnstat -y > /dev/null 2>&1
+    systemctl enable vnstat && systemctl start vnstat
+    # Buka Port
     iptables -I INPUT -p tcp --dport 22 -j ACCEPT
     iptables -I INPUT -p tcp --dport 80 -j ACCEPT
     iptables -I INPUT -p tcp --dport 443 -j ACCEPT
     ufw allow 22,80,443/tcp > /dev/null 2>&1
-    systemctl enable cron > /dev/null 2>&1
-    systemctl start cron > /dev/null 2>&1
 }
 
-# 3. MESIN PEMANTAU (AUTO-KILL LIMIT)
-# Fungsi ini akan dijalankan otomatis oleh sistem setiap menit
+# 3. MESIN PEMANTAU OTOMATIS (IP & KUOTA)
 function auto_limit_check() {
-    # Ambil semua user dari database
     while IFS=' | ' read -r user pass exp tipe maxip quota; do
+        # --- A. CEK LIMIT IP (SSH) ---
         if [[ "$tipe" == "SSH" ]]; then
-            # Hitung jumlah login SSH aktif
             jml_login=$(ps aux | grep -i sshd | grep -v grep | grep "$user" | wc -l)
             if [[ "$jml_login" -gt "$maxip" ]]; then
-                # Tendang user jika melebihi Limit IP
                 pkill -u "$user"
+            fi
+        fi
+
+        # --- B. CEK LIMIT KUOTA (GB) ---
+        # Mengambil data pemakaian harian dari vnstat (dalam MB)
+        # Note: Ini versi sederhana menggunakan total trafik interface utama
+        usage_mb=$(vnstat --oneline | cut -d';' -f11 | sed 's/ MiB//' | cut -d. -f1)
+        usage_gb=$((usage_mb / 1024))
+
+        if [[ "$usage_gb" -ge "$quota" ]]; then
+            # Jika kuota user tertentu habis (berdasarkan logika database)
+            if [[ "$tipe" == "SSH" ]]; then
+                passwd -l "$user" # Kunci akun SSH
+                pkill -u "$user"
+            else
+                # Untuk Xray (Vmess/Vless/Trojan)
+                # Logika: Hapus user dari config jika kuota habis
+                sed -i "/$user/d" /etc/xray/config.json
+                systemctl restart xray > /dev/null 2>&1
             fi
         fi
     done < /etc/xray/users/database.db
 }
 
-# 4. Fungsi Create SSH (4 Input + Limit)
+# 4. Fungsi Create SSH (Output Background Putih)
 function add_ssh() {
     clear
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -62,7 +77,6 @@ function add_ssh() {
     exp=$(date -d "$aktif days" +"%d-%m-%Y")
     useradd -e $(date -d "$aktif days" +"%Y-%m-%d") -s /bin/false -M "$user"
     echo "$user:$pass" | chpasswd
-    # Simpan ke Database: user | pass | exp | tipe | limit_ip | limit_quota
     echo "$user | $pass | $exp | SSH | $maxip | $quota" >> /etc/xray/users/database.db
 
     clear
@@ -74,13 +88,11 @@ function add_ssh() {
     echo -e " Limit IP   : $maxip IP | Limit GB : $quota GB"
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo -e " ${YELLOW}Format Login${NC}"
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo -e "${BG_WHITE} $DOMAIN:22@$user:$pass ${NC}"
     echo -e "${BG_WHITE} $DOMAIN:80@$user:$pass ${NC}"
     echo -e "${BG_WHITE} $DOMAIN:443@$user:$pass ${NC}"
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo -e " ${YELLOW}Payload (HTTP Custom)${NC}"
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo -e "${BG_WHITE} GET / HTTP/1.1[crlf]Host: $DOMAIN[crlf]Connection: Keep-Alive[crlf][crlf] ${NC}"
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo -e " Expiry     : $exp"
@@ -88,7 +100,7 @@ function add_ssh() {
     read -n 1 -s -r -p "Tekan [Enter] untuk kembali..."
 }
 
-# 5. Dashboard Utama (24 Menu)
+# 5. Dashboard Menu (24 Menu)
 function menu() {
     clear
     IP_VPS=$(curl -s ipinfo.io/ip)
@@ -117,7 +129,6 @@ function menu() {
     esac
 }
 
-# Fungsi Check Port (Menu 10)
 function check_port() {
     clear
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -130,16 +141,14 @@ function check_port() {
     menu
 }
 
-# --- LOGIKA INSTALASI AKHIR ---
+# --- SISTEM INSTALASI & CRON ---
 if [[ "$1" == "--limit-check" ]]; then
     auto_limit_check
 else
     pre_install
-    # Memasang Cron Job agar cek Limit IP berjalan tiap 1 menit
     if ! crontab -l | grep -q "limit-check"; then
-        (crontab -l 2>/dev/null; echo "* * * * * /usr/bin/menu --limit-check") | crontab -
+        (crontab -l 2>/dev/null; echo "*/5 * * * * /usr/bin/menu --limit-check") | crontab -
     fi
-    # Pindahkan ke bin
     cp "$0" /usr/bin/menu
     chmod +x /usr/bin/menu
     menu
