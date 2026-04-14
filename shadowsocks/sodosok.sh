@@ -23,7 +23,6 @@ echo -e "${NC}${LIGHT}Fuck You!!"
 exit 0
 fi
 # Link Hosting Kalian
-akbarvpn="raw.githubusercontent.com/fisabiliyusri/Mantap/main/shadowsocks"
 
 source /etc/os-release
 OS=$ID
